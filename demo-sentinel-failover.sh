@@ -31,19 +31,18 @@ error() {
 
 # بررسی master فعلی
 get_current_master() {
-    docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel get-master-addr-by-name mymaster 2>/dev/null | head -1
+    docker exec redis-sentinel-1 sh -c "redis-cli -p 26379 -a \$(cat /run/secrets/redis_sentinel_password) sentinel get-master-addr-by-name mymaster" 2>/dev/null | head -1
 }
 
 # بررسی وضعیت replication
 check_replication() {
     local host=$1
     local port=$2
-    local password=$3
-    local name=$4
+    local name=$3
 
-    local role=$(docker exec $host redis-cli -p $port -a $password info replication | grep "role:" | cut -d: -f2 | tr -d '\r')
-    local master_link=$(docker exec $host redis-cli -p $port -a $password info replication | grep "master_link_status:" | cut -d: -f2 | tr -d '\r' 2>/dev/null || echo "N/A")
-    local connected_slaves=$(docker exec $host redis-cli -p $port -a $password info replication | grep "connected_slaves:" | cut -d: -f2 | tr -d '\r' 2>/dev/null || echo "N/A")
+    local role=$(docker exec $host sh -c "redis-cli -p $port -a \$(cat /run/secrets/redis_master_password) info replication" | grep "role:" | cut -d: -f2 | tr -d '\r')
+    local master_link=$(docker exec $host sh -c "redis-cli -p $port -a \$(cat /run/secrets/redis_master_password) info replication" | grep "master_link_status:" | cut -d: -f2 | tr -d '\r' 2>/dev/null || echo "N/A")
+    local connected_slaves=$(docker exec $host sh -c "redis-cli -p $port -a \$(cat /run/secrets/redis_master_password) info replication" | grep "connected_slaves:" | cut -d: -f2 | tr -d '\r' 2>/dev/null || echo "N/A")
 
     echo "  $name: Role=$role, Master Link=$master_link, Connected Slaves=$connected_slaves"
 }
@@ -63,14 +62,14 @@ main() {
     # بررسی replication برای master فعلی
     current_master=$(get_current_master)
     if [[ "$current_master" == "192.168.55.10" ]]; then
-        check_replication "redis-master" "6379" "redis_master_password_2024" "Master"
+        check_replication "redis-master" "6379" "Master"
     elif [[ "$current_master" == "192.168.55.11" ]]; then
-        check_replication "redis-replica-1" "6379" "redis_master_password_2024" "Master"
+        check_replication "redis-replica-1" "6379" "Master"
     elif [[ "$current_master" == "192.168.55.12" ]]; then
-        check_replication "redis-replica-2" "6379" "redis_master_password_2024" "Master"
+        check_replication "redis-replica-2" "6379" "Master"
     fi
-    check_replication "redis-replica-1" "6379" "redis_master_password_2024" "Replica 1"
-    check_replication "redis-replica-2" "6379" "redis_master_password_2024" "Replica 2"
+    check_replication "redis-replica-1" "6379" "Replica 1"
+    check_replication "redis-replica-2" "6379" "Replica 2"
     
     # مرحله ۲: نوشتن داده‌های آزمایشی
     log ""
@@ -83,11 +82,11 @@ main() {
     # نوشتن به master فعلی به جای کانتینر خاص
     current_master=$(get_current_master)
     if [[ "$current_master" == "192.168.55.10" ]]; then
-        docker exec redis-master redis-cli -a redis_master_password_2024 set "$test_key" "$test_value" &>/dev/null
+        docker exec redis-master sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) set \"$test_key\" \"$test_value\"" &>/dev/null
     elif [[ "$current_master" == "192.168.55.11" ]]; then
-        docker exec redis-replica-1 redis-cli -a redis_master_password_2024 set "$test_key" "$test_value" &>/dev/null
+        docker exec redis-replica-1 sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) set \"$test_key\" \"$test_value\"" &>/dev/null
     elif [[ "$current_master" == "192.168.55.12" ]]; then
-        docker exec redis-replica-2 redis-cli -a redis_master_password_2024 set "$test_key" "$test_value" &>/dev/null
+        docker exec redis-replica-2 sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) set \"$test_key\" \"$test_value\"" &>/dev/null
     fi
     success "Data written to master: $test_key = $test_value"
     
@@ -95,8 +94,8 @@ main() {
     sleep 3
     
     # Verify replication
-    replica1_value=$(docker exec redis-replica-1 redis-cli -a redis_master_password_2024 get "$test_key" 2>/dev/null)
-    replica2_value=$(docker exec redis-replica-2 redis-cli -a redis_master_password_2024 get "$test_key" 2>/dev/null)
+    replica1_value=$(docker exec redis-replica-1 sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) get \"$test_key\"" 2>/dev/null)
+    replica2_value=$(docker exec redis-replica-2 sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) get \"$test_key\"" 2>/dev/null)
     
     if [[ "$replica1_value" == "$test_value" && "$replica2_value" == "$test_value" ]]; then
         success "Data replicated to both replicas"
@@ -129,7 +128,7 @@ main() {
     
     for i in {1..10}; do
         sleep 2
-        masters=$(docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel masters 2>/dev/null || echo "")
+        masters=$(docker exec redis-sentinel-1 sh -c "redis-cli -p 26379 -a \$(cat /run/secrets/redis_sentinel_password) sentinel masters" 2>/dev/null || echo "")
         
         if [[ -n "$masters" ]]; then
             # Parse master status
@@ -182,13 +181,10 @@ main() {
         # Test write to new master
         if [[ "$new_master" == "192.168.55.10" ]]; then
             new_master_container="redis-master"
-            new_master_password="redis_master_password_2024"
         elif [[ "$new_master" == "192.168.55.11" ]]; then
             new_master_container="redis-replica-1"
-            new_master_password="redis_master_password_2024"
         elif [[ "$new_master" == "192.168.55.12" ]]; then
             new_master_container="redis-replica-2"
-            new_master_password="redis_master_password_2024"
         else
             error "Unknown new master: $new_master"
             return 1
@@ -196,7 +192,7 @@ main() {
         
         # Write to new master
         new_test_value="Data after failover - $(date)"
-        docker exec $new_master_container redis-cli -a $new_master_password set "${test_key}_after" "$new_test_value" &>/dev/null
+        docker exec $new_master_container sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) set \"${test_key}_after\" \"$new_test_value\"" &>/dev/null
         success "Successfully wrote to new master"
         
         # مرحله ۷: نمایش وضعیت نهایی
@@ -204,9 +200,9 @@ main() {
         log "📊 مرحله ۷: وضعیت نهایی کلاستر"
         echo "-----------------------------"
         
-        check_replication "$new_master_container" "6379" "$new_master_password" "New Master"
-        check_replication "redis-replica-1" "6379" "redis_master_password_2024" "Replica 1"
-        check_replication "redis-replica-2" "6379" "redis_master_password_2024" "Replica 2"
+        check_replication "$new_master_container" "6379" "New Master"
+        check_replication "redis-replica-1" "6379" "Replica 1"
+        check_replication "redis-replica-2" "6379" "Replica 2"
         
         success "🎉 Failover demo completed successfully!"
         
@@ -227,7 +223,7 @@ main() {
     
     # Wait for master to become available
     for i in {1..10}; do
-        if docker exec redis-master redis-cli -a redis_master_password_2024 ping &>/dev/null; then
+        if docker exec redis-master sh -c "redis-cli -a \$(cat /run/secrets/redis_master_password) ping" &>/dev/null; then
             success "Original master restored"
             break
         else

@@ -6,15 +6,32 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./config/redis-master.conf:/usr/local/etc/redis/redis.conf
       - redis-master-data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
+    secrets:
+      - redis_master_password
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        REDIS_MASTER_PASSWORD=\$$(cat /run/secrets/redis_master_password 2>/dev/null || echo 'redis_master_password_2024') &&
+        echo 'port 6379' > /usr/local/etc/redis/redis.conf &&
+        echo 'bind 0.0.0.0' >> /usr/local/etc/redis/redis.conf &&
+        echo 'protected-mode yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'requirepass '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/redis.conf &&
+        echo 'masterauth '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/redis.conf &&
+        echo 'maxmemory 512mb' >> /usr/local/etc/redis/redis.conf &&
+        echo 'maxmemory-policy allkeys-lru' >> /usr/local/etc/redis/redis.conf &&
+        echo 'dir /data' >> /usr/local/etc/redis/redis.conf &&
+        echo 'appendonly yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'replica-serve-stale-data yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'replica-read-only yes' >> /usr/local/etc/redis/redis.conf &&
+        redis-server /usr/local/etc/redis/redis.conf
+      "
     networks:
       redis-network:
         ipv4_address: 192.168.55.10
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis_master_password_2024", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -a $$(cat /run/secrets/redis_master_password) ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -32,9 +49,27 @@ services:
     ports:
       - "6380:6379"
     volumes:
-      - ./config/redis-replica-1.conf:/usr/local/etc/redis/redis.conf
       - redis-replica-1-data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
+    secrets:
+      - redis_master_password
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        REDIS_MASTER_PASSWORD=\$$(cat /run/secrets/redis_master_password 2>/dev/null || echo 'redis_master_password_2024') &&
+        echo 'port 6379' > /usr/local/etc/redis/redis.conf &&
+        echo 'bind 0.0.0.0' >> /usr/local/etc/redis/redis.conf &&
+        echo 'protected-mode yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'requirepass '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/redis.conf &&
+        echo 'masterauth '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/redis.conf &&
+        echo 'replicaof 192.168.55.10 6379' >> /usr/local/etc/redis/redis.conf &&
+        echo 'maxmemory 512mb' >> /usr/local/etc/redis/redis.conf &&
+        echo 'maxmemory-policy allkeys-lru' >> /usr/local/etc/redis/redis.conf &&
+        echo 'dir /data' >> /usr/local/etc/redis/redis.conf &&
+        echo 'appendonly yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'replica-serve-stale-data yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'replica-read-only yes' >> /usr/local/etc/redis/redis.conf &&
+        redis-server /usr/local/etc/redis/redis.conf
+      "
     networks:
       redis-network:
         ipv4_address: 192.168.55.11
@@ -43,7 +78,7 @@ services:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis_master_password_2024", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -a $$(cat /run/secrets/redis_master_password) ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -63,9 +98,27 @@ services:
     ports:
       - "6381:6379"
     volumes:
-      - ./config/redis-replica-2.conf:/usr/local/etc/redis/redis.conf
       - redis-replica-2-data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
+    secrets:
+      - redis_master_password
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        REDIS_MASTER_PASSWORD=\$$(cat /run/secrets/redis_master_password 2>/dev/null || echo 'redis_master_password_2024') &&
+        echo 'port 6379' > /usr/local/etc/redis/redis.conf &&
+        echo 'bind 0.0.0.0' >> /usr/local/etc/redis/redis.conf &&
+        echo 'protected-mode yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'requirepass '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/redis.conf &&
+        echo 'masterauth '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/redis.conf &&
+        echo 'replicaof 192.168.55.10 6379' >> /usr/local/etc/redis/redis.conf &&
+        echo 'maxmemory 512mb' >> /usr/local/etc/redis/redis.conf &&
+        echo 'maxmemory-policy allkeys-lru' >> /usr/local/etc/redis/redis.conf &&
+        echo 'dir /data' >> /usr/local/etc/redis/redis.conf &&
+        echo 'appendonly yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'replica-serve-stale-data yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'replica-read-only yes' >> /usr/local/etc/redis/redis.conf &&
+        redis-server /usr/local/etc/redis/redis.conf
+      "
     networks:
       redis-network:
         ipv4_address: 192.168.55.12
@@ -74,7 +127,7 @@ services:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis_master_password_2024", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -a $$(cat /run/secrets/redis_master_password) ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -93,9 +146,26 @@ services:
     hostname: redis-sentinel-1
     ports:
       - "26379:26379"
-    volumes:
-      - ./sentinel-configs/sentinel-1:/usr/local/etc/redis
-    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    secrets:
+      - redis_master_password
+      - redis_sentinel_password
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        REDIS_MASTER_PASSWORD=\$$(cat /run/secrets/redis_master_password 2>/dev/null || echo 'redis_master_password_2024') &&
+        REDIS_SENTINEL_PASSWORD=\$$(cat /run/secrets/redis_sentinel_password 2>/dev/null || echo 'redis_sentinel_password_2024') &&
+        echo 'port 26379' > /usr/local/etc/redis/sentinel.conf &&
+        echo 'bind 0.0.0.0' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'protected-mode yes' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'requirepass '\$$REDIS_SENTINEL_PASSWORD >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel monitor mymaster 192.168.55.10 6379 2' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel auth-pass mymaster '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel announce-ip 192.168.55.20' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel announce-port 26379' >> /usr/local/etc/redis/sentinel.conf &&
+        redis-sentinel /usr/local/etc/redis/sentinel.conf
+      "
     networks:
       redis-network:
         ipv4_address: 192.168.55.20
@@ -104,13 +174,18 @@ services:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "26379", "-a", "redis_sentinel_password_2024", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -p 26379 -a $$(cat /run/secrets/redis_sentinel_password) ping"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
     environment:
       - REDIS_SENTINEL_MODE=yes
+      - SENTINEL_ANNOUNCE_IP=192.168.55.20
+      - SENTINEL_ANNOUNCE_PORT=26379
+      - MASTER_HOST=192.168.55.10
+      - MASTER_PORT=6379
+      - QUORUM=2
     labels:
       - "redis.role=sentinel"
       - "redis.port=26379"
@@ -121,9 +196,26 @@ services:
     hostname: redis-sentinel-2
     ports:
       - "26380:26379"
-    volumes:
-      - ./sentinel-configs/sentinel-2:/usr/local/etc/redis
-    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    secrets:
+      - redis_master_password
+      - redis_sentinel_password
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        REDIS_MASTER_PASSWORD=\$$(cat /run/secrets/redis_master_password 2>/dev/null || echo 'redis_master_password_2024') &&
+        REDIS_SENTINEL_PASSWORD=\$$(cat /run/secrets/redis_sentinel_password 2>/dev/null || echo 'redis_sentinel_password_2024') &&
+        echo 'port 26379' > /usr/local/etc/redis/sentinel.conf &&
+        echo 'bind 0.0.0.0' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'protected-mode yes' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'requirepass '\$$REDIS_SENTINEL_PASSWORD >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel monitor mymaster 192.168.55.10 6379 2' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel auth-pass mymaster '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel announce-ip 192.168.55.21' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel announce-port 26379' >> /usr/local/etc/redis/sentinel.conf &&
+        redis-sentinel /usr/local/etc/redis/sentinel.conf
+      "
     networks:
       redis-network:
         ipv4_address: 192.168.55.21
@@ -132,13 +224,18 @@ services:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "26379", "-a", "redis_sentinel_password_2024", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -p 26379 -a $$(cat /run/secrets/redis_sentinel_password) ping"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
     environment:
       - REDIS_SENTINEL_MODE=yes
+      - SENTINEL_ANNOUNCE_IP=192.168.55.21
+      - SENTINEL_ANNOUNCE_PORT=26379
+      - MASTER_HOST=192.168.55.10
+      - MASTER_PORT=6379
+      - QUORUM=2
     labels:
       - "redis.role=sentinel"
       - "redis.port=26380"
@@ -149,9 +246,26 @@ services:
     hostname: redis-sentinel-3
     ports:
       - "26381:26379"
-    volumes:
-      - ./sentinel-configs/sentinel-3:/usr/local/etc/redis
-    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    secrets:
+      - redis_master_password
+      - redis_sentinel_password
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        REDIS_MASTER_PASSWORD=\$$(cat /run/secrets/redis_master_password 2>/dev/null || echo 'redis_master_password_2024') &&
+        REDIS_SENTINEL_PASSWORD=\$$(cat /run/secrets/redis_sentinel_password 2>/dev/null || echo 'redis_sentinel_password_2024') &&
+        echo 'port 26379' > /usr/local/etc/redis/sentinel.conf &&
+        echo 'bind 0.0.0.0' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'protected-mode yes' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'requirepass '\$$REDIS_SENTINEL_PASSWORD >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel monitor mymaster 192.168.55.10 6379 2' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel auth-pass mymaster '\$$REDIS_MASTER_PASSWORD >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel announce-ip 192.168.55.22' >> /usr/local/etc/redis/sentinel.conf &&
+        echo 'sentinel announce-port 26379' >> /usr/local/etc/redis/sentinel.conf &&
+        redis-sentinel /usr/local/etc/redis/sentinel.conf
+      "
     networks:
       redis-network:
         ipv4_address: 192.168.55.22
@@ -160,13 +274,18 @@ services:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "26379", "-a", "redis_sentinel_password_2024", "ping"]
+      test: ["CMD", "sh", "-c", "redis-cli -p 26379 -a $$(cat /run/secrets/redis_sentinel_password) ping"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
     environment:
       - REDIS_SENTINEL_MODE=yes
+      - SENTINEL_ANNOUNCE_IP=192.168.55.22
+      - SENTINEL_ANNOUNCE_PORT=26379
+      - MASTER_HOST=192.168.55.10
+      - MASTER_PORT=6379
+      - QUORUM=2
     labels:
       - "redis.role=sentinel"
       - "redis.port=26381"
@@ -202,6 +321,12 @@ volumes:
     driver: local
   redis-replica-2-data:
     driver: local
+
+secrets:
+  redis_master_password:
+    file: ./secrets/redis_master_password
+  redis_sentinel_password:
+    file: ./secrets/redis_sentinel_password
 
 networks:
   redis-network:
