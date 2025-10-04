@@ -26,7 +26,7 @@ This project sets up a Redis cluster with one Master and two Replicas using Dock
 
 ### Prerequisites
 - Docker and Docker Compose installed
-- Python 3.6+ (for testing)
+- Python 3.6+ (for testing) - uses virtual environment on Ubuntu 24.04+
 - Redis CLI (optional, for manual testing)
 - Docker secrets files configured (see Security section)
 
@@ -402,12 +402,16 @@ Run tests with:
 ```bash
 # Test Redis cluster functionality
 python3 test-redis-cluster.py
+# Or use the wrapper script (recommended for Ubuntu 24.04+)
+./run-tests.sh test-redis-cluster.py
 
 # Test Sentinel monitoring and HA
 python3 test-sentinel-simple.py
+# Or use the wrapper script (recommended for Ubuntu 24.04+)
+./run-tests.sh test-sentinel-simple.py
 
 # Run failover demonstration
-demo-sentinel-failover.sh
+./demo-sentinel-failover.sh
 ```
 
 ## 📋 Project Structure

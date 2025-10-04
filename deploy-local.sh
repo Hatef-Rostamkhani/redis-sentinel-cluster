@@ -150,19 +150,53 @@ install_python_deps() {
     # Check if Python 3 is installed
     if ! command -v python3 &> /dev/null; then
         log "Installing Python 3..."
-        apt-get install -y python3 python3-pip
+        apt-get install -y python3 python3-pip python3-venv python3-full
     fi
     
-    # Install pip if not present
+    # Install pip and venv if not present
     if ! command -v pip3 &> /dev/null; then
-        log "Installing pip3..."
-        apt-get install -y python3-pip
+        log "Installing pip3 and venv..."
+        apt-get install -y python3-pip python3-venv python3-full
     fi
     
-    # Install Redis Python client
-    pip3 install redis
+    # Try to install Redis client via system package manager first
+    log "Attempting to install Redis client via system package manager..."
+    if apt-get install -y python3-redis 2>/dev/null; then
+        log "Redis client installed via system package manager"
+        
+        # Create a simple wrapper script for system Python
+        cat > run-tests.sh << 'EOF'
+#!/bin/bash
+cd /opt/redis-cluster
+python3 "$@"
+EOF
+        chmod +x run-tests.sh
+        success "Python dependencies installed via system packages"
+        return 0
+    else
+        log "System package not available, using virtual environment..."
+    fi
     
-    success "Python dependencies installed"
+    # Create virtual environment for the project
+    log "Creating Python virtual environment..."
+    cd "$PROJECT_DIR"
+    python3 -m venv venv
+    
+    # Activate virtual environment and install Redis client
+    log "Installing Redis Python client in virtual environment..."
+    source venv/bin/activate
+    pip install redis
+    
+    # Create a wrapper script for running tests with the virtual environment
+    cat > run-tests.sh << 'EOF'
+#!/bin/bash
+cd /opt/redis-cluster
+source venv/bin/activate
+python3 "$@"
+EOF
+    chmod +x run-tests.sh
+    
+    success "Python dependencies installed in virtual environment"
 }
 
 # Deploy and start services
@@ -221,15 +255,15 @@ run_tests() {
     
     cd "$PROJECT_DIR"
     
-    # Run Python tests if they exist
+    # Run Python tests if they exist using virtual environment
     if [ -f "test-redis-cluster.py" ]; then
         log "Running Redis cluster tests..."
-        python3 test-redis-cluster.py || warning "Some tests failed"
+        ./run-tests.sh test-redis-cluster.py || warning "Some tests failed"
     fi
     
     if [ -f "test-sentinel-simple.py" ]; then
         log "Running Sentinel tests..."
-        python3 test-sentinel-simple.py || warning "Some tests failed"
+        ./run-tests.sh test-sentinel-simple.py || warning "Some tests failed"
     fi
     
     success "Tests completed"
@@ -256,8 +290,9 @@ show_access_info() {
     echo "Restart services: cd $PROJECT_DIR && docker-compose restart"
     echo ""
     echo "=== Test Commands ==="
-    echo "Run cluster tests: cd $PROJECT_DIR && python3 test-redis-cluster.py"
-    echo "Run sentinel tests: cd $PROJECT_DIR && python3 test-sentinel-simple.py"
+    echo "Run cluster tests: cd $PROJECT_DIR && ./run-tests.sh test-redis-cluster.py"
+    echo "Run sentinel tests: cd $PROJECT_DIR && ./run-tests.sh test-sentinel-simple.py"
+    echo "Activate venv: cd $PROJECT_DIR && source venv/bin/activate"
     echo ""
     echo "=== Management Commands ==="
     echo "Connect to Master:     redis-cli -h localhost -p 6379 -a \$(cat $PROJECT_DIR/secrets/redis_master_password)"

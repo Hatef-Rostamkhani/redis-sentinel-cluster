@@ -376,9 +376,13 @@ docker-compose logs -f redis-sentinel-1
 ```bash
 # تست عملکرد Redis cluster
 python3 test-redis-cluster.py
+# یا استفاده از wrapper script (توصیه شده برای Ubuntu 24.04+)
+./run-tests.sh test-redis-cluster.py
 
 # تست مانیتورینگ و HA Sentinel
 python3 test-sentinel-simple.py
+# یا استفاده از wrapper script (توصیه شده برای Ubuntu 24.04+)
+./run-tests.sh test-sentinel-simple.py
 
 # اجرای نمایش failover
 ./demo-sentinel-failover.sh
