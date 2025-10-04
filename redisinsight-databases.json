@@ -1,0 +1,29 @@
+[
+  {
+    "id": "redis-master",
+    "name": "Redis Master",
+    "host": "192.168.55.10",
+    "port": 6379,
+    "password": "redis_master_password_2024",
+    "db": 0,
+    "connectionType": "STANDALONE"
+  },
+  {
+    "id": "redis-replica-1",
+    "name": "Redis Replica 1",
+    "host": "192.168.55.11",
+    "port": 6379,
+    "password": "redis_master_password_2024",
+    "db": 0,
+    "connectionType": "STANDALONE"
+  },
+  {
+    "id": "redis-replica-2",
+    "name": "Redis Replica 2",
+    "host": "192.168.55.12",
+    "port": 6379,
+    "password": "redis_master_password_2024",
+    "db": 0,
+    "connectionType": "STANDALONE"
+  }
+]

@@ -13,11 +13,13 @@
          │                       │                       │
          └───────────────────────┼───────────────────────┘
                                  │
-                    ┌─────────────────┐
-                    │ Redis Commander │
-                    │   Port: 8081    │
-                    │   (Web UI)      │
-                    └─────────────────┘
+         ┌─────────────────────────────────────────────────┐
+         │              Sentinel Cluster                   │
+         │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │
+         │  │ Sentinel 1  │ │ Sentinel 2  │ │ Sentinel 3  │ │
+         │  │ Port: 26379 │ │ Port: 26380 │ │ Port: 26381 │ │
+         │  └─────────────┘ └─────────────┘ └─────────────┘ │
+         └─────────────────────────────────────────────────┘
 ```
 
 ## 🚀 راه‌اندازی سریع
@@ -53,16 +55,23 @@ docker-compose logs -f
 - **Redis Master**: 6379
 - **Redis Replica 1**: 6380
 - **Redis Replica 2**: 6381
-- **Redis Commander**: 8081
+- **Redis Sentinel 1**: 26379
+- **Redis Sentinel 2**: 26380
+- **Redis Sentinel 3**: 26381
+- **Redis Commander**: 8083 (غیرفعال به دلیل تداخل پورت)
 
 ### رمزهای عبور
 - **Master**: `redis_master_password_2024`
 - **Replicas**: `redis_replica_password_2024`
+- **Sentinels**: `redis_sentinel_password_2024`
 
 ### فایل‌های پیکربندی
 - `config/redis-master.conf` - پیکربندی Master
 - `config/redis-replica-1.conf` - پیکربندی Replica 1
 - `config/redis-replica-2.conf` - پیکربندی Replica 2
+- `config/redis-sentinel-1.conf` - پیکربندی Sentinel 1
+- `config/redis-sentinel-2.conf` - پیکربندی Sentinel 2
+- `config/redis-sentinel-3.conf` - پیکربندی Sentinel 3
 
 ## 🔐 ویژگی‌های امنیتی
 
@@ -79,12 +88,31 @@ docker-compose logs -f
 - RDB snapshots منظم
 - Volume های persistent برای داده‌ها
 
+### 4. دسترسی بالا با Sentinel
+- سه نود Sentinel برای تصمیم‌گیری مبتنی بر quorum
+- قابلیت failover خودکار
+- مانیتورینگ Master و بررسی سلامت
+- Service discovery برای اپلیکیشن‌ها
+
 ## 📊 مانیتورینگ
 
-### Redis Commander
-- دسترسی به رابط وب: http://localhost:8081
-- مشاهده تمام نودها در یک رابط واحد
-- امکان اجرای دستورات Redis
+### تست‌های جامع عملکرد
+```bash
+# اجرای تست‌های Redis cluster
+python3 test-redis-cluster.py
+
+# اجرای تست‌های Sentinel cluster
+python3 test-sentinel-simple.py
+```
+
+مجموعه تست‌ها شامل:
+- ✅ تست اتصال
+- ✅ بررسی وضعیت replication
+- ✅ تست عملیات خواندن/نوشتن
+- ✅ تأیید رفتار read-only در replicas
+- ✅ اتصال و مانیتورینگ Sentinel
+- ✅ کشف Master/Slave توسط Sentinel
+- ✅ ارتباط بین Sentinel ها
 
 ### Health Checks
 - بررسی خودکار سلامت نودها
@@ -121,6 +149,36 @@ docker exec -it redis-replica-1 redis-cli -a redis_replica_password_2024
 
 # اتصال به Replica 2
 docker exec -it redis-replica-2 redis-cli -a redis_replica_password_2024
+
+# اتصال به Sentinel 1
+docker exec -it redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024
+
+# اتصال به Sentinel 2
+docker exec -it redis-sentinel-2 redis-cli -p 26379 -a redis_sentinel_password_2024
+
+# اتصال به Sentinel 3
+docker exec -it redis-sentinel-3 redis-cli -p 26379 -a redis_sentinel_password_2024
+```
+
+### اتصال خارجی
+```bash
+# اتصال به Master از host
+redis-cli -h localhost -p 6379 -a redis_master_password_2024
+
+# اتصال به Replica 1 از host
+redis-cli -h localhost -p 6380 -a redis_replica_password_2024
+
+# اتصال به Replica 2 از host
+redis-cli -h localhost -p 6381 -a redis_replica_password_2024
+
+# اتصال به Sentinel 1 از host
+redis-cli -h localhost -p 26379 -a redis_sentinel_password_2024
+
+# اتصال به Sentinel 2 از host
+redis-cli -h localhost -p 26380 -a redis_sentinel_password_2024
+
+# اتصال به Sentinel 3 از host
+redis-cli -h localhost -p 26381 -a redis_sentinel_password_2024
 ```
 
 ### بررسی وضعیت Replication
@@ -131,6 +189,15 @@ docker exec redis-master redis-cli -a redis_master_password_2024 info replicatio
 # بررسی وضعیت Replicas
 docker exec redis-replica-1 redis-cli -a redis_replica_password_2024 info replication
 docker exec redis-replica-2 redis-cli -a redis_replica_password_2024 info replication
+
+# بررسی وضعیت مانیتورینگ Sentinel
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel masters
+
+# بررسی slaves مانیتور شده توسط Sentinel
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel slaves mymaster
+
+# بررسی سایر Sentinel ها در cluster
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel sentinels mymaster
 ```
 
 ### تست عملکرد
@@ -138,8 +205,17 @@ docker exec redis-replica-2 redis-cli -a redis_replica_password_2024 info replic
 # تست نوشتن در Master
 docker exec redis-master redis-cli -a redis_master_password_2024 set test_key "Hello Redis"
 
-# تست خواندن از Replica
+# تست خواندن از Replica 1
 docker exec redis-replica-1 redis-cli -a redis_replica_password_2024 get test_key
+
+# تست خواندن از Replica 2
+docker exec redis-replica-2 redis-cli -a redis_replica_password_2024 get test_key
+
+# دریافت Master فعلی از طریق Sentinel
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel get-master-addr-by-name mymaster
+
+# بررسی اطلاعات Sentinel
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 info sentinel
 ```
 
 ## 🔍 عیب‌یابی
@@ -170,6 +246,31 @@ docker exec redis-replica-1 ping redis-master
 docker exec redis-master redis-cli -a redis_master_password_2024 ping
 ```
 
+#### 4. تداخل پورت‌ها
+```bash
+# بررسی استفاده از پورت‌ها
+netstat -tulpn | grep :6379
+netstat -tulpn | grep :6380
+netstat -tulpn | grep :6381
+netstat -tulpn | grep :26379
+netstat -tulpn | grep :26380
+netstat -tulpn | grep :26381
+```
+
+#### 5. مشکلات Sentinel
+```bash
+# بررسی لاگ‌های Sentinel
+docker-compose logs redis-sentinel-1
+docker-compose logs redis-sentinel-2
+docker-compose logs redis-sentinel-3
+
+# تست اتصال Sentinel
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 ping
+
+# بررسی پیکربندی Sentinel
+docker exec redis-sentinel-1 redis-cli -p 26379 -a redis_sentinel_password_2024 sentinel masters
+```
+
 ### لاگ‌ها
 ```bash
 # مشاهده لاگ‌های زنده
@@ -178,6 +279,7 @@ docker-compose logs -f
 # مشاهده لاگ‌های خاص
 docker-compose logs -f redis-master
 docker-compose logs -f redis-replica-1
+docker-compose logs -f redis-sentinel-1
 ```
 
 ## 📈 بهینه‌سازی
@@ -203,9 +305,69 @@ docker-compose logs -f redis-replica-1
 3. **SSL/TLS**: برای اتصالات خارجی از SSL استفاده کنید
 4. **مانیتورینگ**: لاگ‌ها و عملکرد را به طور منظم بررسی کنید
 
+## 🧪 تست‌ها
+
+پروژه شامل مجموعه تست‌های جامعی است که موارد زیر را تأیید می‌کند:
+
+### تست‌های Redis Cluster (`test-redis-cluster.py`)
+1. **تست اتصال**: بررسی دسترسی به تمام نودها
+2. **وضعیت Replication**: تأیید روابط master-replica
+3. **عملیات داده**: تست عملیات خواندن/نوشتن و replication
+4. **امنیت**: تأیید رفتار read-only در replicas
+
+### تست‌های Sentinel Cluster (`test-sentinel-simple.py`)
+1. **اتصال Sentinel**: تأیید دسترسی به تمام نودهای Sentinel
+2. **مانیتورینگ Master**: تأیید مانیتورینگ Master توسط Sentinel
+3. **مانیتورینگ Slave**: تأیید کشف Replica ها توسط Sentinel
+4. **ارتباط Cluster**: تست ارتباط بین Sentinel ها
+5. **اتصال Master**: اطمینان از کارکرد اتصال مستقیم به Master
+
+اجرای تست‌ها:
+```bash
+# تست عملکرد Redis cluster
+python3 test-redis-cluster.py
+
+# تست مانیتورینگ و HA Sentinel
+python3 test-sentinel-simple.py
+```
+
+## 📋 ساختار پروژه
+
+```
+test-docker/
+├── config/
+│   ├── redis-master.conf      # پیکربندی Master
+│   ├── redis-replica-1.conf   # پیکربندی Replica 1
+│   ├── redis-replica-2.conf   # پیکربندی Replica 2
+│   ├── redis-sentinel-1.conf  # پیکربندی Sentinel 1
+│   ├── redis-sentinel-2.conf  # پیکربندی Sentinel 2
+│   └── redis-sentinel-3.conf  # پیکربندی Sentinel 3
+├── docker-compose.yml         # پیکربندی Docker Compose
+├── test-redis-cluster.py      # مجموعه تست‌های Redis cluster
+├── test-sentinel-simple.py    # مجموعه تست‌های Sentinel cluster
+├── start-redis-cluster.sh     # اسکریپت راه‌اندازی Linux/macOS
+├── start-redis-cluster.bat    # اسکریپت راه‌اندازی Windows
+├── requirements.txt           # وابستگی‌های Python
+├── README.md                  # مستندات فارسی
+└── README-EN.md              # مستندات انگلیسی
+```
+
+## 🤝 مشارکت
+
+1. Fork کردن repository
+2. ایجاد شاخه feature
+3. اعمال تغییرات
+4. تست کامل
+5. ارسال pull request
+
 ## 📚 منابع بیشتر
 
 - [Redis Documentation](https://redis.io/documentation)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [Redis Replication](https://redis.io/topics/replication)
 - [Redis Security](https://redis.io/topics/security)
+- [Redis Performance](https://redis.io/topics/benchmarks)
+
+## 📄 مجوز
+
+این پروژه open source است و تحت مجوز MIT در دسترس می‌باشد.

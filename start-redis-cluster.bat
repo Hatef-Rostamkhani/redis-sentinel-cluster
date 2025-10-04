@@ -50,7 +50,7 @@ docker exec redis-replica-2 redis-cli -a redis_replica_password_2024 info replic
 
 echo.
 echo ✅ Redis Cluster is ready!
-echo 🌐 Redis Commander (Web UI): http://localhost:8081
+echo 🌐 Redis Commander (Web UI): http://localhost:8083 (currently disabled)
 echo.
 echo 📝 Connection Details:
 echo    Master:   localhost:6379 (Password: redis_master_password_2024)

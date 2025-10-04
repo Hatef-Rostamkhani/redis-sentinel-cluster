@@ -10,10 +10,11 @@ services:
       - redis-master-data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
-      - redis-network
+      redis-network:
+        ipv4_address: 192.168.55.10
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "redis_master_password_2024", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -35,20 +36,21 @@ services:
       - redis-replica-1-data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
-      - redis-network
+      redis-network:
+        ipv4_address: 192.168.55.11
     restart: unless-stopped
     depends_on:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "redis_master_password_2024", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
     environment:
       - REDIS_REPLICATION_MODE=slave
-      - REDIS_MASTER_HOST=redis-master
+      - REDIS_MASTER_HOST=192.168.55.10
       - REDIS_MASTER_PORT=6379
     labels:
       - "redis.role=replica"
@@ -65,40 +67,131 @@ services:
       - redis-replica-2-data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
-      - redis-network
+      redis-network:
+        ipv4_address: 192.168.55.12
     restart: unless-stopped
     depends_on:
       redis-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "redis_master_password_2024", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
     environment:
       - REDIS_REPLICATION_MODE=slave
-      - REDIS_MASTER_HOST=redis-master
+      - REDIS_MASTER_HOST=192.168.55.10
       - REDIS_MASTER_PORT=6379
     labels:
       - "redis.role=replica"
       - "redis.port=6381"
 
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: redis-commander
-    hostname: redis-commander
+  redis-sentinel-1:
+    image: redis:7-alpine
+    container_name: redis-sentinel-1
+    hostname: redis-sentinel-1
     ports:
-      - "8081:8081"
+      - "26379:26379"
+    volumes:
+      - ./sentinel-configs/sentinel-1:/usr/local/etc/redis
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
     networks:
-      - redis-network
+      redis-network:
+        ipv4_address: 192.168.55.20
+    restart: unless-stopped
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "-a", "redis_sentinel_password_2024", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      - REDIS_SENTINEL_MODE=yes
+    labels:
+      - "redis.role=sentinel"
+      - "redis.port=26379"
+
+  redis-sentinel-2:
+    image: redis:7-alpine
+    container_name: redis-sentinel-2
+    hostname: redis-sentinel-2
+    ports:
+      - "26380:26379"
+    volumes:
+      - ./sentinel-configs/sentinel-2:/usr/local/etc/redis
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    networks:
+      redis-network:
+        ipv4_address: 192.168.55.21
+    restart: unless-stopped
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "-a", "redis_sentinel_password_2024", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      - REDIS_SENTINEL_MODE=yes
+    labels:
+      - "redis.role=sentinel"
+      - "redis.port=26380"
+
+  redis-sentinel-3:
+    image: redis:7-alpine
+    container_name: redis-sentinel-3
+    hostname: redis-sentinel-3
+    ports:
+      - "26381:26379"
+    volumes:
+      - ./sentinel-configs/sentinel-3:/usr/local/etc/redis
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    networks:
+      redis-network:
+        ipv4_address: 192.168.55.22
+    restart: unless-stopped
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "-a", "redis_sentinel_password_2024", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    environment:
+      - REDIS_SENTINEL_MODE=yes
+    labels:
+      - "redis.role=sentinel"
+      - "redis.port=26381"
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: redisinsight
+    hostname: redisinsight
+    ports:
+      - "8001:5540"
+    volumes:
+      - ./redisinsight-databases.json:/usr/src/app/redisinsight/api/dist/databases.json
+      - ./redisinsight-config.json:/usr/src/app/redisinsight/api/dist/config.json
+    networks:
+      redis-network:
+        ipv4_address: 192.168.55.30
     restart: unless-stopped
     depends_on:
       - redis-master
       - redis-replica-1
       - redis-replica-2
     environment:
-      - REDIS_HOSTS=local:redis-master:6379,replica1:redis-replica-1:6379,replica2:redis-replica-2:6379
+      - RI_PRE_SETUP_DATABASES_PATH=/usr/src/app/redisinsight/api/dist/databases.json
+      - RI_APP_PORT=5540
+      - RI_APP_HOST=0.0.0.0
     labels:
       - "service.type=monitoring"
 
@@ -112,4 +205,11 @@ volumes:
 
 networks:
   redis-network:
+    name: redisnet
+    attachable: true
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.55.0/24
+          gateway: 192.168.55.1
