@@ -28,11 +28,12 @@ This project sets up a Redis cluster with one Master and two Replicas using Dock
 - Docker and Docker Compose installed
 - Python 3.6+ (for testing)
 - Redis CLI (optional, for manual testing)
+- Docker secrets files configured (see Security section)
 
 ### Windows
 ```bash
-# Run startup script
-start-redis-cluster.bat
+# Run startup script (manual setup recommended for Windows)
+docker-compose up -d
 ```
 
 ### Linux/macOS
@@ -63,12 +64,12 @@ docker-compose logs -f
 - **Redis Sentinel 1**: 26379
 - **Redis Sentinel 2**: 26380
 - **Redis Sentinel 3**: 26381
-- **Redis Commander**: 8083 (currently disabled due to port conflicts)
+- **RedisInsight**: 8001 (Web UI for Redis management)
 
 ### Passwords
-- **Master**: `redis_master_password_2024`
-- **Replicas**: `redis_replica_password_2024`
-- **Sentinels**: `redis_sentinel_password_2024`
+- **Master**: `redis_master_password_2024` (configurable via Docker secrets)
+- **Replicas**: `redis_replica_password_2024` (configurable via Docker secrets)
+- **Sentinels**: `redis_sentinel_password_2024` (configurable via Docker secrets)
 
 ### Configuration Files
 - `config/redis-master.conf` - Master configuration
@@ -78,28 +79,47 @@ docker-compose logs -f
 - `config/redis-sentinel-2.conf` - Sentinel 2 configuration
 - `config/redis-sentinel-3.conf` - Sentinel 3 configuration
 
+### Initialization Scripts
+- `scripts/init-redis-master.sh` - Master initialization script
+- `scripts/init-redis-replica.sh` - Replica initialization script
+- `scripts/init-redis-sentinel.sh` - Sentinel initialization script
+
+### Docker Secrets
+- `secrets/redis_master_password` - Master password file
+- `secrets/redis_sentinel_password` - Sentinel password file
+
 ## 🔐 Security Features
 
-### 1. Authentication
+### 1. Docker Secrets Integration
+- Passwords stored in Docker secrets files
+- No hardcoded passwords in configuration
+- Secure password management following Docker best practices
+- Password rotation without container rebuilds
+
+### 2. Authentication
 - All nodes protected with strong passwords
 - Separate passwords for Master and Replicas
 - Protected mode enabled
+- Dynamic password loading from secrets
 
-### 2. Network Isolation
+### 3. Network Isolation
 - Dedicated Docker network (`redis-network`)
-- Internal port restrictions
+- Internal port restrictions with static IPs
 - Bridge network for secure inter-container communication
+- Isolated subnet (192.168.55.0/24)
 
-### 3. Data Persistence
+### 4. Data Persistence
 - AOF (Append Only File) enabled
 - Regular RDB snapshots
 - Persistent volumes for data storage
+- Data directory isolation per node
 
-### 4. High Availability with Sentinel
+### 5. High Availability with Sentinel
 - Three Sentinel nodes for quorum-based decisions
 - Automatic failover capability
 - Master monitoring and health checks
 - Service discovery for applications
+- Failover timeout and down-after-milliseconds configured
 
 ## 📊 Monitoring & Health Checks
 
@@ -108,6 +128,14 @@ docker-compose logs -f
 - Service dependency management
 - Automatic restart on failure
 - Health check intervals: 10s
+- Password-aware health checks using Docker secrets
+
+### RedisInsight Web UI
+- Modern web-based Redis management interface
+- Accessible at http://localhost:8001
+- Pre-configured database connections
+- Real-time monitoring and administration
+- Query interface and performance analytics
 
 ### Comprehensive Testing
 ```bash
@@ -128,6 +156,18 @@ The test suites include:
 - ✅ Sentinel cluster communication
 
 ## 🛠️ Useful Commands
+
+### Demo and Testing Scripts
+```bash
+# Run Sentinel failover demonstration
+demo-sentinel-failover.sh
+
+# Test Redis cluster functionality
+python3 test-redis-cluster.py
+
+# Test Sentinel monitoring and HA
+python3 test-sentinel-simple.py
+```
 
 ### Service Management
 ```bash
@@ -323,13 +363,21 @@ docker-compose logs -f redis-sentinel-1
 
 - [Redis Documentation](https://redis.io/documentation)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
+- [Docker Secrets Documentation](https://docs.docker.com/engine/swarm/secrets/)
 - [Redis Replication](https://redis.io/topics/replication)
+- [Redis Sentinel](https://redis.io/topics/sentinel)
 - [Redis Security](https://redis.io/topics/security)
 - [Redis Performance](https://redis.io/topics/benchmarks)
+- [RedisInsight Documentation](https://docs.redis.com/latest/ri/)
+
+## 📄 Documentation Files
+
+- `README-Docker-Secrets.md` - Detailed Docker secrets implementation guide
+- `SECRETS-IMPLEMENTATION-SUMMARY.md` - Summary of security improvements
 
 ## 🧪 Testing
 
-The project includes comprehensive test suites that validate:
+The project includes comprehensive test suites and demo scripts that validate:
 
 ### Redis Cluster Tests (`test-redis-cluster.py`)
 1. **Connection Testing**: Verifies all Redis nodes are accessible
@@ -344,6 +392,12 @@ The project includes comprehensive test suites that validate:
 4. **Cluster Communication**: Tests Sentinel-to-Sentinel communication
 5. **Master Connectivity**: Ensures direct master access works
 
+### Failover Demonstration (`demo-sentinel-failover.sh`)
+1. **Live Failover Demo**: Shows real-time Sentinel failover process
+2. **Master Promotion**: Demonstrates replica-to-master promotion
+3. **Service Recovery**: Tests automatic service restoration
+4. **Health Monitoring**: Validates cluster health during failover
+
 Run tests with:
 ```bash
 # Test Redis cluster functionality
@@ -351,6 +405,9 @@ python3 test-redis-cluster.py
 
 # Test Sentinel monitoring and HA
 python3 test-sentinel-simple.py
+
+# Run failover demonstration
+demo-sentinel-failover.sh
 ```
 
 ## 📋 Project Structure
@@ -364,12 +421,22 @@ test-docker/
 │   ├── redis-sentinel-1.conf  # Sentinel 1 configuration
 │   ├── redis-sentinel-2.conf  # Sentinel 2 configuration
 │   └── redis-sentinel-3.conf  # Sentinel 3 configuration
+├── scripts/
+│   ├── init-redis-master.sh   # Master initialization script
+│   ├── init-redis-replica.sh  # Replica initialization script
+│   └── init-redis-sentinel.sh # Sentinel initialization script
+├── secrets/
+│   ├── redis_master_password  # Master password secret
+│   └── redis_sentinel_password # Sentinel password secret
 ├── docker-compose.yml         # Docker Compose configuration
 ├── test-redis-cluster.py      # Redis cluster test suite
 ├── test-sentinel-simple.py    # Sentinel cluster test suite
+├── demo-sentinel-failover.sh  # Failover demonstration script
 ├── start-redis-cluster.sh     # Linux/macOS startup script
-├── start-redis-cluster.bat    # Windows startup script
 ├── requirements.txt           # Python dependencies
+├── redisinsight-config.json   # RedisInsight configuration
+├── redisinsight-databases.json # RedisInsight database definitions
+├── README-Docker-Secrets.md   # Docker secrets documentation
 ├── README.md                  # Persian documentation
 └── README-EN.md              # English documentation
 ```

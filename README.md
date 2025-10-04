@@ -26,8 +26,8 @@
 
 ### Windows
 ```bash
-# اجرای اسکریپت راه‌اندازی
-start-redis-cluster.bat
+# اجرای اسکریپت راه‌اندازی (راه‌اندازی دستی برای Windows توصیه می‌شود)
+docker-compose up -d
 ```
 
 ### Linux/macOS
@@ -58,12 +58,12 @@ docker-compose logs -f
 - **Redis Sentinel 1**: 26379
 - **Redis Sentinel 2**: 26380
 - **Redis Sentinel 3**: 26381
-- **Redis Commander**: 8083 (غیرفعال به دلیل تداخل پورت)
+- **RedisInsight**: 8001 (رابط وب برای مدیریت Redis)
 
 ### رمزهای عبور
-- **Master**: `redis_master_password_2024`
-- **Replicas**: `redis_replica_password_2024`
-- **Sentinels**: `redis_sentinel_password_2024`
+- **Master**: `redis_master_password_2024` (قابل تنظیم از طریق Docker secrets)
+- **Replicas**: `redis_replica_password_2024` (قابل تنظیم از طریق Docker secrets)
+- **Sentinels**: `redis_sentinel_password_2024` (قابل تنظیم از طریق Docker secrets)
 
 ### فایل‌های پیکربندی
 - `config/redis-master.conf` - پیکربندی Master
@@ -73,28 +73,62 @@ docker-compose logs -f
 - `config/redis-sentinel-2.conf` - پیکربندی Sentinel 2
 - `config/redis-sentinel-3.conf` - پیکربندی Sentinel 3
 
+### اسکریپت‌های راه‌اندازی
+- `scripts/init-redis-master.sh` - اسکریپت راه‌اندازی Master
+- `scripts/init-redis-replica.sh` - اسکریپت راه‌اندازی Replica
+- `scripts/init-redis-sentinel.sh` - اسکریپت راه‌اندازی Sentinel
+
+### Docker Secrets
+- `secrets/redis_master_password` - فایل رمز Master
+- `secrets/redis_sentinel_password` - فایل رمز Sentinel
+
 ## 🔐 ویژگی‌های امنیتی
 
-### 1. احراز هویت
-- تمام نودها با رمز عبور محافظت شده‌اند
+### 1. پیاده‌سازی Docker Secrets
+- رمزهای عبور در فایل‌های Docker secrets ذخیره می‌شوند
+- عدم وجود رمزهای عبور سخت‌کد شده در پیکربندی
+- مدیریت امن رمزهای عبور مطابق با بهترین روش‌های Docker
+- امکان تغییر رمزهای عبور بدون بازسازی کانتینرها
+
+### 2. احراز هویت
+- تمام نودها با رمزهای عبور قوی محافظت شده‌اند
 - رمزهای عبور جداگانه برای Master و Replicas
+- حالت محافظت شده فعال
+- بارگذاری پویای رمزهای عبور از secrets
 
-### 2. شبکه‌ایزوله
+### 3. شبکه‌ایزوله
 - شبکه اختصاصی برای Redis (`redis-network`)
-- محدودیت دسترسی به پورت‌های داخلی
+- محدودیت دسترسی به پورت‌های داخلی با IP های ثابت
+- شبکه bridge برای ارتباط امن بین کانتینرها
+- زیرشبکه جدا شده (192.168.55.0/24)
 
-### 3. پایداری داده‌ها
+### 4. پایداری داده‌ها
 - AOF (Append Only File) فعال
 - RDB snapshots منظم
-- Volume های persistent برای داده‌ها
+- Volume های persistent برای ذخیره داده‌ها
+- جداسازی دایرکتوری داده برای هر نود
 
-### 4. دسترسی بالا با Sentinel
+### 5. دسترسی بالا با Sentinel
 - سه نود Sentinel برای تصمیم‌گیری مبتنی بر quorum
 - قابلیت failover خودکار
 - مانیتورینگ Master و بررسی سلامت
 - Service discovery برای اپلیکیشن‌ها
+- تنظیمات timeout و down-after-milliseconds
 
 ## 📊 مانیتورینگ
+
+### Health Checks
+- بررسی خودکار سلامت نودها
+- راه‌اندازی خودکار در صورت خرابی
+- وابستگی‌های صحیح بین سرویس‌ها
+- بررسی‌های سلامت آگاه از رمز عبور با استفاده از Docker secrets
+
+### RedisInsight رابط وب
+- رابط مدیریت Redis مبتنی بر وب مدرن
+- دسترسی از طریق http://localhost:8001
+- اتصالات پایگاه داده از پیش پیکربندی شده
+- مانیتورینگ و مدیریت بلادرنگ
+- رابط پرس‌وجو و تحلیل عملکرد
 
 ### تست‌های جامع عملکرد
 ```bash
@@ -103,6 +137,9 @@ python3 test-redis-cluster.py
 
 # اجرای تست‌های Sentinel cluster
 python3 test-sentinel-simple.py
+
+# اجرای نمایش failover
+./demo-sentinel-failover.sh
 ```
 
 مجموعه تست‌ها شامل:
@@ -114,12 +151,19 @@ python3 test-sentinel-simple.py
 - ✅ کشف Master/Slave توسط Sentinel
 - ✅ ارتباط بین Sentinel ها
 
-### Health Checks
-- بررسی خودکار سلامت نودها
-- راه‌اندازی خودکار در صورت خرابی
-- وابستگی‌های صحیح بین سرویس‌ها
-
 ## 🛠️ دستورات مفید
+
+### اسکریپت‌های نمایشی و تست
+```bash
+# اجرای نمایش failover Sentinel
+./demo-sentinel-failover.sh
+
+# تست عملکرد Redis cluster
+python3 test-redis-cluster.py
+
+# تست مانیتورینگ و HA Sentinel
+python3 test-sentinel-simple.py
+```
 
 ### مدیریت سرویس‌ها
 ```bash
@@ -307,7 +351,7 @@ docker-compose logs -f redis-sentinel-1
 
 ## 🧪 تست‌ها
 
-پروژه شامل مجموعه تست‌های جامعی است که موارد زیر را تأیید می‌کند:
+پروژه شامل مجموعه تست‌های جامع و اسکریپت‌های نمایشی است که موارد زیر را تأیید می‌کند:
 
 ### تست‌های Redis Cluster (`test-redis-cluster.py`)
 1. **تست اتصال**: بررسی دسترسی به تمام نودها
@@ -322,6 +366,12 @@ docker-compose logs -f redis-sentinel-1
 4. **ارتباط Cluster**: تست ارتباط بین Sentinel ها
 5. **اتصال Master**: اطمینان از کارکرد اتصال مستقیم به Master
 
+### نمایش Failover (`demo-sentinel-failover.sh`)
+1. **نمایش زنده Failover**: نمایش فرآیند failover Sentinel در زمان واقعی
+2. **ارتقای Master**: نمایش ارتقای replica به master
+3. **بازیابی سرویس**: تست بازیابی خودکار سرویس
+4. **مانیتورینگ سلامت**: تأیید سلامت cluster در طول failover
+
 اجرای تست‌ها:
 ```bash
 # تست عملکرد Redis cluster
@@ -329,6 +379,9 @@ python3 test-redis-cluster.py
 
 # تست مانیتورینگ و HA Sentinel
 python3 test-sentinel-simple.py
+
+# اجرای نمایش failover
+./demo-sentinel-failover.sh
 ```
 
 ## 📋 ساختار پروژه
@@ -342,12 +395,22 @@ test-docker/
 │   ├── redis-sentinel-1.conf  # پیکربندی Sentinel 1
 │   ├── redis-sentinel-2.conf  # پیکربندی Sentinel 2
 │   └── redis-sentinel-3.conf  # پیکربندی Sentinel 3
+├── scripts/
+│   ├── init-redis-master.sh   # اسکریپت راه‌اندازی Master
+│   ├── init-redis-replica.sh  # اسکریپت راه‌اندازی Replica
+│   └── init-redis-sentinel.sh # اسکریپت راه‌اندازی Sentinel
+├── secrets/
+│   ├── redis_master_password  # secret رمز Master
+│   └── redis_sentinel_password # secret رمز Sentinel
 ├── docker-compose.yml         # پیکربندی Docker Compose
 ├── test-redis-cluster.py      # مجموعه تست‌های Redis cluster
 ├── test-sentinel-simple.py    # مجموعه تست‌های Sentinel cluster
+├── demo-sentinel-failover.sh  # اسکریپت نمایش failover
 ├── start-redis-cluster.sh     # اسکریپت راه‌اندازی Linux/macOS
-├── start-redis-cluster.bat    # اسکریپت راه‌اندازی Windows
 ├── requirements.txt           # وابستگی‌های Python
+├── redisinsight-config.json   # پیکربندی RedisInsight
+├── redisinsight-databases.json # تعاریف پایگاه داده RedisInsight
+├── README-Docker-Secrets.md   # مستندات Docker secrets
 ├── README.md                  # مستندات فارسی
 └── README-EN.md              # مستندات انگلیسی
 ```
@@ -364,9 +427,17 @@ test-docker/
 
 - [Redis Documentation](https://redis.io/documentation)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
+- [Docker Secrets Documentation](https://docs.docker.com/engine/swarm/secrets/)
 - [Redis Replication](https://redis.io/topics/replication)
+- [Redis Sentinel](https://redis.io/topics/sentinel)
 - [Redis Security](https://redis.io/topics/security)
 - [Redis Performance](https://redis.io/topics/benchmarks)
+- [RedisInsight Documentation](https://docs.redis.com/latest/ri/)
+
+## 📄 فایل‌های مستندات
+
+- `README-Docker-Secrets.md` - راهنمای تفصیلی پیاده‌سازی Docker secrets
+- `SECRETS-IMPLEMENTATION-SUMMARY.md` - خلاصه بهبودهای امنیتی
 
 ## 📄 مجوز
 
